@@ -1,0 +1,51 @@
+[project]
+name = "ikea-assembly-planning"
+version = "0.1.0"
+description = "Manual2Skill: Robot furniture assembly guided by IKEA manuals"
+requires-python = ">=3.13"
+dependencies = [
+    # LLM inference pipeline
+    "openai>=1.0.0",
+    "langchain",
+    "langchain-core",
+    "langchain-openai",
+    "langchain-anthropic",
+    "langchain-google-vertexai",
+    "langchain-ollama",
+    "pydantic",
+    "python-dotenv",
+    "google-auth", # google.oauth2.credentials for ChatVertexAI
+    # Utilities used across VLM scripts
+    "tqdm",
+    "numpy",
+    "scikit-learn",
+    "matplotlib",
+    "opencv-python", # scene_gen/annotator.py
+    "Pillow", # PIL image handling for supervision annotators
+    "supervision>=0.26.0", # Gemini 2.5 bbox annotation (sv.VLM.GOOGLE_GEMINI_2_5)
+    # Behavior tree generation and visualization (stage4_formalize.py)
+    "py-trees>=2.2.3",
+    "pydot>=2.0.0",
+    # Visualization app
+    "streamlit>=1.44.0",
+    "pyyaml",
+    "networkx>=3.6.1",
+]
+
+[project.optional-dependencies]
+# Install with: uv sync --extra pose-estimation
+# Note: pytorch3d has no PyPI wheels; install separately from source.
+# Note: bpy (Blender Python API) is bundled with Blender — do not pip-install it.
+pose-estimation = [
+    "torch",
+    "torchvision",
+    "scipy",
+    "pillow",
+    "h5py",
+    "einops",
+    "wandb",
+]
+
+[tool.uv]
+package = false
+python-preference = "only-system"

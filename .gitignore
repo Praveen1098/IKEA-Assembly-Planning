@@ -1,7 +1,14 @@
+# Environment / secrets
+.env
+.venv/
+
+CLAUDE.md
+
 __pycache__/
 *.pyc
 VLM_assembly_plan_gen/data/
 VLM_assembly_plan_gen/outputs/
+VLM_assembly_plan_gen/checkpoints/
 dataset/
 pose_estimation/dataset/raw_data/
 pose_estimation/pose_estimation/logs/
@@ -9,3 +16,6 @@ pose_estimation/pose_estimation/wandb/
 *.pkl
 *.zip
 */__pycache__/
+.claude/
+
+

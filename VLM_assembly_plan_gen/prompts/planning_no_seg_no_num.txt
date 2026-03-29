@@ -6,7 +6,7 @@ You will also receive a rbg image of the scene consisting of furniture parts lab
 
 Your new task is to carefully describe every step according to the manual. Each page of the manual should correspond to one step. Your planned steps should only describe what and how furniture parts are involved, don't worry about nails and other minor tools for now. Your focus should only be on the furniture parts. Be as specific as possible in your description.
 
-Let's think step by step: (1) count the total number of manual pages. This will be your total number of steps. (2) for each step, focus on one furniture part at a time. Describe only the furniture parts involved in that step. (3) repeat 2 for each remaining step until all steps are described. So if there is only one page of the setup manual, then there is only one step. If there are ten pages of the setup manual, then there are ten steps.
+Let's think step by step: (1) count the total number of manual pages. This will be your total number of steps. (2) for each step, examine the manual page carefully and identify ALL furniture parts visible or referenced in that image. Go through the JSON table part by part—starting from the very first entry, which may have ID 0—and check whether each numbered part appears in the current step's manual image. Note: the JSON table may include a part with ID 0; this is a valid furniture part and must not be skipped. List every part that is involved—do not stop at the first or most prominent part. **Important cross-check:** after drafting the parts list for a step, scan back through every entry in the JSON table from the first ID to the last and explicitly confirm whether each part is included or excluded. A part that appears small, partially hidden, or in the background of the manual image is still involved in that step if it is shown or referenced—do not omit it. Only exclude a part if it is genuinely absent from the page. (3) repeat 2 for each remaining step until all steps are described. So if there is only one page of the setup manual, then there is only one step. If there are ten pages of the setup manual, then there are ten steps.
 
 Here is an example of a fully constructed plan for your reference only. It has nothing to do with the current plan:
 
@@ -14,9 +14,9 @@ Here is an example of a fully constructed plan for your reference only. It has n
 There are four input images, but one of them contains furniture parts lying on a floor that are labeled with marks (white numbers with a black square background). So in reality, there are only three manual pages. Thus, there are three total steps.
 
 ### Step 1:
-- **Parts Needed:** Backrest Frame (1), Seat Cushion (5)
+- **Parts Needed:** Base Board (0), Backrest Frame (1), Seat Cushion (5)
 - **Instructions:**
-  - **Align Frame and Seat:** Connect the backrest frame (1) next to the seat cushion (5) as shown in the manual page.
+  - **Place Base and Attach Frame:** Lay the base board (0) flat, then connect the backrest frame (1) and seat cushion (5) to it as shown in the manual page.
 
 ### Step 2:
 - **Parts Needed:** Subassembly from Step 1, Side Leg Frame (2)

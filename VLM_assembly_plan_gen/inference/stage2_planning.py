@@ -1,17 +1,24 @@
-from openai import OpenAI
 import os
-from datetime import datetime
 
-from config import DATA_DIR, DEFAULT_MODEL, DEFAULT_MAX_TOKENS, SCENE_DIR
+from config import DATA_DIR, SCENE_DIR
 from utils import encode_image, load_prompt, ensure_dir, alphanumeric_sort_key
+from llm.utils import invoke_multimodal
 
-def create_plan(furniture_name, furniture_type, pdf_path, output_table, args):
-    """Create a furniture assembly plan based on manual images."""
+def create_plan(furniture_name, furniture_type, pdf_path, output_table, args, mask_dir=None, llm=None):
+    """Create a furniture assembly plan based on manual images.
+
+    Args:
+        mask_dir: Optional override for the base mask directory. When provided,
+                  masks are loaded from mask_dir/furniture_type/furniture_name/
+                  instead of the default data/mask/ location. Use this to pass
+                  VLM-generated masks produced by segment.process_item().
+        llm: LangChain LLM instance from load_llm_from_recipe().
+    """
     if args.prompt_type == "numbered":
         prompt_text = "planning_no_seg"
     else:
         prompt_text = "planning_no_seg_no_num"
-    
+
     # Setup paths
     if args.scene_type == "original":
         scene_type = "scene_annotated.png"
@@ -19,73 +26,37 @@ def create_plan(furniture_name, furniture_type, pdf_path, output_table, args):
         scene_type = "scene_rot_annotated.png"
     image_path = os.path.join(SCENE_DIR, furniture_type, furniture_name, scene_type)
     base64_image = encode_image(image_path)
-    
-    # Initialize OpenAI client
-    client = OpenAI()
-    
+
     # Load prompt text
     prompt = load_prompt(prompt_text)
     prompt = prompt + output_table
-    
+
     # Encode manual images
     obj_img = []
-    mask_dir = os.path.join(DATA_DIR, "mask", furniture_type, furniture_name)
-    file_list = os.listdir(mask_dir)
+    mask_base = mask_dir if mask_dir else os.path.join(DATA_DIR, "mask")
+    mask_dir_path = os.path.join(mask_base, furniture_type, furniture_name)
+    file_list = os.listdir(mask_dir_path)
     sorted_file_list = sorted(file_list, key=alphanumeric_sort_key)
 
     for filename in sorted_file_list:
         if args.prompt_type == "numbered" and filename.endswith("seg_numbered.png"):
-            img_path = os.path.join(mask_dir, filename)
+            img_path = os.path.join(mask_dir_path, filename)
             obj_img.append(encode_image(img_path))
         elif args.prompt_type == "not_numbered" and filename.endswith("seg.png"):
-            img_path = os.path.join(mask_dir, filename)
+            img_path = os.path.join(mask_dir_path, filename)
             obj_img.append(encode_image(img_path))
 
-    # Build image messages
-    image_messages = [
-        {
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{base64_image}",
-                "detail": "high"
-            },
-        }
-    ]
-        
-    for b64_obj_image in obj_img:
-        image_messages.append({
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{b64_obj_image}",
-                "detail": "high"
-            },
-        })
-    
-    response = client.chat.completions.create(
-        model=args.model,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    *image_messages
-                ],
-            }
-        ],
-        max_tokens=DEFAULT_MAX_TOKENS,
-        temperature=args.temp,
-    )
-    
+    result = invoke_multimodal(llm, prompt, [base64_image] + obj_img, mime_type="image/jpeg")
+
     # Save response
     if args.debug:
         output_folder = os.path.join(pdf_path, furniture_type, furniture_name, "debug")
         ensure_dir(output_folder)
-        
         with open(os.path.join(output_folder, "stage2_prompt.txt"), "w") as f:
             f.write(prompt)
         print(f"Saved stage2 input prompt to {os.path.join(output_folder, 'stage2_prompt.txt')}")
         with open(os.path.join(output_folder, "stage2_output.txt"), "w") as f:
-            f.write(response.choices[0].message.content)
+            f.write(result)
         print(f"Saved stage2 output to {os.path.join(output_folder, 'stage2_output.txt')}")
-    
-    return response.choices[0].message.content
+
+    return result

@@ -1,0 +1,55 @@
+endpoint:
+  "GPT-4o": "https://api.ai-service.global.fujitsu.com/ai-foundation/chat-ai/gpt4"
+  "GPT-4o-mini": "https://api.ai-service.global.fujitsu.com/ai-foundation/chat-ai/gpt4o-mini"
+  "GPT-5.1": "https://api.ai-service.global.fujitsu.com/ai-foundation/chat-ai/gpt/gpt-5.1"
+  "GEMINI-2.5-pro": "https://api.ai-service.global.fujitsu.com/ai-foundation/chat-ai/gemini/pro-thinking:generateContent"
+  "GEMINI-2.5-flash": "https://api.ai-service.global.fujitsu.com/ai-foundation/chat-ai/gemini/flash:generateContent"
+
+################# LLMs #################
+
+# Available models
+models:
+  - id: "gemini-flash"
+    engine: Gemini
+    name: GEMINI-2.5-flash
+    display_name: "Gemini 2.5 Flash"
+    max_retries: 3
+    max_tokens: 64000
+    temperature: 0.1
+    thinking_budget: 8000
+
+  - id: "gemini-pro"
+    engine: Gemini
+    name: GEMINI-2.5-pro
+    display_name: "Gemini 2.5 Pro"
+    max_retries: 3
+    max_tokens: 64000
+    temperature: 0.1
+    thinking_budget: 16000
+  
+  - id: "gpt4o"
+    engine: GPT
+    name: GPT-4o
+    display_name: "GPT-4o"
+    max_retries: 10
+    max_tokens: 16384
+    temperature: 0
+  
+  - id: "gpt4o-mini"
+    engine: GPT
+    name: GPT-4o-mini
+    display_name: "GPT-4o Mini"
+    max_retries: 10
+    max_tokens: 16384
+    temperature: 0
+
+  - id: "gpt-5.1"
+    engine: GPT
+    name: GPT-5.1
+    display_name: "GPT-5.1"
+    max_retries: 10
+    max_tokens: 128000
+    api_version: "DUMMY"
+
+# Default model selection
+default_model: "gemini-pro"
