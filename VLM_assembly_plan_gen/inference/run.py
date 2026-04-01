@@ -8,7 +8,7 @@ from tqdm import tqdm
 # Add VLM_assembly_plan_gen/ to path so llm/ package is importable
 sys.path.append(str(Path(__file__).parent.parent))
 
-from config import MANUAL_DATA_PATH, OUTPUT_DIR, RECIPE_PATH
+from config import MANUAL_DATA_PATH, OUTPUT_DIR, RECIPE_PATH, DATA_DIR
 from llm.model import load_llm_from_recipe
 from utils import load_json
 from stage1_associate import select_materials_for_planning
@@ -30,6 +30,9 @@ def parse_args():
                    choices=["tree", "actions", "pddl", "bt"],
                    help="Output format: tree (default) | actions | pddl | bt. "
                         "'actions' runs Stage 3 only. 'pddl'/'bt' run Stages 3+4.")
+    p.add_argument("--use_sam2", action="store_true",
+                   help="Use SAM2-generated masks from data/sam2_mask/ instead of "
+                        "pre-computed masks in data/mask/")
     return p.parse_args()
 
 def main():
@@ -42,13 +45,22 @@ def main():
     # Load main pipeline LLM once for all items
     llm = load_llm_from_recipe(RECIPE_PATH, args.model)
 
+    # SAM2 mask directory override
+    mask_dir = os.path.join(DATA_DIR, "sam2_mask") if args.use_sam2 else None
+    if args.use_sam2:
+        if not os.path.isdir(mask_dir):
+            print(f"ERROR: SAM2 mask directory not found: {mask_dir}")
+            print("Run `python -m part_segmentation.predict` first to generate masks.")
+            sys.exit(1)
+        print(f"Using SAM2 masks from: {mask_dir}")
+
     for idx in tqdm(range(args.start, min(args.end, len(data))), desc="Generating Assembly Graphs"):
         item = data[idx]
         name, cat = item["name"], item["category"]
 
         stage1_output = select_materials_for_planning(name, cat, output_path, args, llm)
 
-        stage2_output = create_plan(name, cat, output_path, stage1_output, args, mask_dir=None, llm=llm)
+        stage2_output = create_plan(name, cat, output_path, stage1_output, args, mask_dir=mask_dir, llm=llm)
 
         convert_to_tree(name, cat, output_path, stage2_output, args, llm)
 
