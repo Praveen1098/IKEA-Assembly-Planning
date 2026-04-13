@@ -4,14 +4,10 @@ from config import DATA_DIR, SCENE_DIR
 from utils import encode_image, load_prompt, ensure_dir, alphanumeric_sort_key
 from llm.utils import invoke_multimodal
 
-def create_plan(furniture_name, furniture_type, pdf_path, output_table, args, mask_dir=None, llm=None):
+def create_plan(furniture_name, furniture_type, pdf_path, output_table, args, llm=None):
     """Create a furniture assembly plan based on manual images.
 
     Args:
-        mask_dir: Optional override for the base mask directory. When provided,
-                  masks are loaded from mask_dir/furniture_type/furniture_name/
-                  instead of the default data/mask/ location. Use this to pass
-                  VLM-generated masks produced by segment.process_item().
         llm: LangChain LLM instance from load_llm_from_recipe().
     """
     if args.prompt_type == "numbered":
@@ -33,7 +29,7 @@ def create_plan(furniture_name, furniture_type, pdf_path, output_table, args, ma
 
     # Encode manual images
     obj_img = []
-    mask_base = mask_dir if mask_dir else os.path.join(DATA_DIR, "mask")
+    mask_base = os.path.join(DATA_DIR, "mask")
     mask_dir_path = os.path.join(mask_base, furniture_type, furniture_name)
     file_list = os.listdir(mask_dir_path)
     sorted_file_list = sorted(file_list, key=alphanumeric_sort_key)

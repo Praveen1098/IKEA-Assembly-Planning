@@ -17,5 +17,6 @@ pose_estimation/pose_estimation/wandb/
 *.zip
 */__pycache__/
 .claude/
+VLM_assembly_plan_gen/dinov2/
 
 

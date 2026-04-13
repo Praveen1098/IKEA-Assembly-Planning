@@ -72,6 +72,30 @@ def render_tree(node, indent: int = 0) -> str:
     return "".join(lines)
 
 
+def _plotly_download_buttons(fig, basename: str) -> None:
+    """Render PNG + HTML download buttons for a Plotly figure."""
+    _c1, _c2 = st.columns(2)
+    try:
+        _png = fig.to_image(format="png", scale=2)
+        _c1.download_button(
+            "⬇ Download PNG",
+            data=_png,
+            file_name=f"{basename}.png",
+            mime="image/png",
+            key=f"dl_png_{basename}",
+        )
+    except Exception:
+        _c1.caption("PNG download requires `kaleido` (`pip install kaleido`)")
+    _html = fig.to_html(full_html=True, include_plotlyjs="cdn")
+    _c2.download_button(
+        "⬇ Download HTML (interactive)",
+        data=_html,
+        file_name=f"{basename}.html",
+        mime="text/html",
+        key=f"dl_html_{basename}",
+    )
+
+
 def list_manual_pages(cat: str, name: str) -> list[str]:
     pages_dir = os.path.join(DATA_DIR, "pdfs", cat, name)
     if not os.path.isdir(pages_dir):
@@ -232,10 +256,11 @@ with st.sidebar:
 
     st.divider()
     st.header("Stages to Run")
-    run_stage3 = st.checkbox("Stage 3 — Actions", value=True)
-    run_pddl   = st.checkbox("Stage 4 — PDDL",    value=True)
-    run_bt     = st.checkbox("Stage 4 — Behavior Tree", value=True)
-    debug_mode = st.checkbox("Debug mode", value=False)
+    run_stage3        = st.checkbox("Stage 3 — Actions",       value=True)
+    run_pddl          = st.checkbox("Stage 4 — PDDL",          value=True)
+    run_bt            = st.checkbox("Stage 4 — Behavior Tree", value=True)
+    run_pddl_validate = st.checkbox("Stage 3.5 — PDDL Validate", value=False)
+    debug_mode        = st.checkbox("Debug mode",               value=False)
 
     st.divider()
     run_clicked = st.button("▶ Run Pipeline", type="primary", width='stretch')
@@ -259,6 +284,7 @@ if run_clicked:
         prompt_type=prompt_type,
         scene_type="original" if scene_type == "original" else "rotated",
         output_format="bt",
+        validate_pddl=run_pddl_validate,
     )
     timestamp = datetime.now().strftime("%Y_%m_%d_%H%M%S")
     output_path = os.path.join(OUTPUT_DIR, timestamp)
@@ -341,7 +367,7 @@ if run_clicked:
                 to_behavior_tree(results["actions"], output_path)
                 item_dir = os.path.join(output_path, category, furniture_name)
                 results["bt_ascii"] = open(
-                    os.path.join(item_dir, "behavior_tree_ascii.txt"), encoding="utf-8"
+                    os.path.join(item_dir, "behavior_tree.txt"), encoding="utf-8"
                 ).read()
                 results["bt_xml"] = open(
                     os.path.join(item_dir, "behavior_tree.xml"), encoding="utf-8"
@@ -371,14 +397,17 @@ last = st.session_state.get("last_furniture", (category, furniture_name, furnitu
 # For Inputs tab always use current sidebar selection
 disp_cat, disp_name, disp_idx = category, furniture_name, furniture_idx
 
-tab_inputs, tab_s1, tab_s2, tab_tree, tab_s3, tab_pddl, tab_bt = st.tabs([
+tab_inputs, tab_s1, tab_s2, tab_tree, tab_s3, \
+tab_pddl, tab_pddl_val, tab_bt, tab_bt_ltl = st.tabs([
     "Inputs",
-    "Stage 1 — Parts Identification",
-    "Stage 2 — Plan Generation",
-    "Assembly Tree Generation",
-    "Stage 3 — Action Extraction",
-    "PDDL Generation",
-    "Behavior Tree Generation",
+    "Stage 1 — Parts",
+    "Stage 2 — Plan",
+    "Assembly Tree",
+    "Stage 3 — Actions",
+    "PDDL",
+    "PDDL Validation",
+    "Behavior Tree",
+    "BT Verification",
 ])
 
 # ── Tab: Inputs ───────────────────────────────────────────────────────────────
@@ -390,6 +419,14 @@ with tab_inputs:
         scene_p = scene_image_path(disp_cat, disp_name, scene_type)
         if os.path.exists(scene_p):
             st.image(scene_p, width='stretch')
+            with open(scene_p, "rb") as _f:
+                st.download_button(
+                    "⬇ Download Scene Image",
+                    data=_f.read(),
+                    file_name=f"{disp_name}_scene.png",
+                    mime="image/png",
+                    key="dl_scene_img",
+                )
         else:
             st.warning(f"Scene image not found: `{scene_p}`")
 
@@ -400,6 +437,14 @@ with tab_inputs:
             for i, pg in enumerate(pages):
                 with cols[i % 4]:
                     st.image(pg, caption=os.path.basename(pg), width='stretch')
+                    with open(pg, "rb") as _f:
+                        st.download_button(
+                            "⬇ Download",
+                            data=_f.read(),
+                            file_name=os.path.basename(pg),
+                            mime="image/png",
+                            key=f"dl_page_{i}",
+                        )
         else:
             st.info("No manual page images found.")
 
@@ -465,56 +510,32 @@ with tab_tree:
     if "tree_error" in results:
         st.error(f"Tree conversion failed: {results['tree_error']}")
 
-    gt_tree = data[disp_idx].get("assembly_tree")
+    gt_tree        = data[disp_idx].get("assembly_tree")
     predicted_tree = results.get("tree")
-
-    # Determine how many columns to draw
-    _has_gt = gt_tree is not None
-    _has_pred = predicted_tree is not None
+    _has_gt        = gt_tree is not None
+    _has_pred      = predicted_tree is not None
 
     if _has_gt or _has_pred:
-        try:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
+        from app_viz import make_plotly_assembly_tree
 
-            num_cols = (1 if _has_gt else 0) + (1 if _has_pred else 0)
-            fig, axes = plt.subplots(1, num_cols, figsize=(10 * num_cols, 10))
-            if num_cols == 1:
-                axes = [axes]
-
-            _ax_idx = 0
-            if _has_pred:
-                try:
-                    pred_root = _build_assembly_tree(
-                        predicted_tree, [0], [0], disp_cat, disp_name
-                    )
-                    _draw_assembly_graph(pred_root, "VLM Predicted Assembly Graph", axes[_ax_idx])
-                except Exception as _e:
-                    axes[_ax_idx].set_title(f"Predicted graph unavailable: {_e}")
-                _ax_idx += 1
-
-            if _has_gt:
-                try:
-                    gt_root = _build_assembly_tree(
-                        gt_tree, [0], [0], disp_cat, disp_name
-                    )
-                    _draw_assembly_graph(gt_root, "Ground Truth Assembly Graph", axes[_ax_idx])
-                except Exception as _e:
-                    axes[_ax_idx].set_title(f"Ground truth graph unavailable: {_e}")
-
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close(fig)
-
-        except ImportError as _e:
-            st.warning(f"Graph visualization requires networkx and matplotlib: {_e}")
-            if _has_pred:
+        if _has_pred:
+            try:
+                pred_root = _build_assembly_tree(predicted_tree, [0], [0], disp_cat, disp_name)
+                _pred_fig = make_plotly_assembly_tree(pred_root, "VLM Predicted Assembly Graph")
+                st.plotly_chart(_pred_fig, use_container_width=True)
+                _plotly_download_buttons(_pred_fig, f"{disp_name}_predicted_tree")
+            except Exception as _e:
+                st.error(f"Predicted graph unavailable: {_e}")
                 st.code(render_tree(predicted_tree).strip(), language=None)
-        except Exception as _e:
-            st.error(f"Graph visualization failed: {_e}")
-            if _has_pred:
-                st.code(render_tree(predicted_tree).strip(), language=None)
+
+        if _has_gt:
+            try:
+                gt_root = _build_assembly_tree(gt_tree, [0], [0], disp_cat, disp_name)
+                _gt_fig = make_plotly_assembly_tree(gt_root, "Ground Truth Assembly Graph")
+                st.plotly_chart(_gt_fig, use_container_width=True)
+                _plotly_download_buttons(_gt_fig, f"{disp_name}_gt_tree")
+            except Exception as _e:
+                st.error(f"Ground truth graph unavailable: {_e}")
 
     if _has_pred:
         with st.expander("Raw JSON (predicted tree)", expanded=False):
@@ -573,6 +594,7 @@ with tab_s3:
 
 # ── Tab: PDDL ─────────────────────────────────────────────────────────────────
 with tab_pddl:
+    # ── 1. Generated domain / problem code (if pipeline ran) ──
     if "pddl_error" in results:
         st.error(f"PDDL generation failed: {results['pddl_error']}")
     elif "domain_pddl" in results or "problem_pddl" in results:
@@ -580,51 +602,304 @@ with tab_pddl:
         with col_d:
             st.subheader("domain.pddl")
             st.code(results.get("domain_pddl", ""), language="lisp")
+            st.download_button(
+                "⬇ Download domain.pddl",
+                data=results.get("domain_pddl", ""),
+                file_name=f"{last[1]}_domain.pddl",
+                mime="text/plain",
+                key="dl_domain_pddl",
+            )
         with col_p:
             st.subheader("problem.pddl")
             st.code(results.get("problem_pddl", ""), language="lisp")
+            st.download_button(
+                "⬇ Download problem.pddl",
+                data=results.get("problem_pddl", ""),
+                file_name=f"{last[1]}_problem.pddl",
+                mime="text/plain",
+                key="dl_problem_pddl",
+            )
     else:
-        st.info("Run the pipeline with PDDL enabled to see output.")
+        st.info("Run the pipeline with PDDL enabled to see generated files.")
+
+    st.divider()
+
+    # ── 2. Skill Library (always visible — no pipeline run required) ──
+    st.subheader("Skill Library")
+    st.caption("PDDL-style preconditions and postconditions for each robot primitive")
+    try:
+        import pandas as pd
+        from stage3_5_pddl_validate import SKILL_LIBRARY
+        rows = [
+            {
+                "Primitive": k,
+                "Preconditions":   " ∧ ".join(v["pre"]),
+                "Postconditions":  " ∧ ".join(v["post"]),
+            }
+            for k, v in SKILL_LIBRARY.items()
+        ]
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    except Exception as _e:
+        st.warning(f"Could not load Skill Library: {_e}")
+
+    st.divider()
+
+    # ── 3. Precondition / Effect graph ──
+    st.subheader("Precondition / Effect Graph")
+    st.caption("Arrows show which predicates each action requires (left) and produces (right)")
+    try:
+        from app_viz import make_pddl_skill_graph
+        _skill_fig = make_pddl_skill_graph()
+        st.plotly_chart(_skill_fig, use_container_width=True)
+        _plotly_download_buttons(_skill_fig, "pddl_skill_graph")
+    except Exception as _e:
+        st.warning(f"Could not render skill graph: {_e}")
+
+# ── Tab: PDDL Validation ──────────────────────────────────────────────────────
+with tab_pddl_val:
+    st.subheader("PDDL Consistency Validation")
+    st.caption(
+        "Validates that actions.json is logically executable: "
+        "PyPerPlan checks that every connection goal is reachable "
+        "from the initial state (all parts accessible, gripper empty)."
+    )
+
+    _actions_available = "actions" in results
+    _output_path = results.get("output_path", "")
+    _last_cat, _last_name = last[0], last[1]
+
+    # Allow validating a previously-generated actions.json even without re-running
+    _actions_path = os.path.join(_output_path, _last_cat, _last_name, "actions.json") \
+        if _output_path else ""
+    _file_exists = os.path.isfile(_actions_path)
+
+    if not _actions_available and not _file_exists:
+        st.info("Run the pipeline with Stage 3 enabled, then click Validate.")
+    else:
+        if _file_exists:
+            st.caption(f"Validating: `{_actions_path}`")
+
+        if st.button("▶ Run PDDL Validation", key="btn_pddl_validate",
+                     disabled=not _file_exists):
+            with st.spinner("Running PyPerPlan …"):
+                try:
+                    import tempfile
+                    from stage3_5_pddl_validate import (
+                        generate_pddl_domain, generate_pddl_problem,
+                        _run_pyperplan,
+                    )
+                    import json as _json
+                    with open(_actions_path) as _f:
+                        _act_data = _json.load(_f)
+                    _parts = _act_data.get("parts", [])
+                    _conns = _act_data.get("all_connections", [])
+
+                    _dom = generate_pddl_domain()
+                    _prob = generate_pddl_problem(_parts, _conns)
+
+                    with tempfile.TemporaryDirectory() as _td:
+                        _df = os.path.join(_td, "domain.pddl")
+                        _pf = os.path.join(_td, "problem.pddl")
+                        with open(_df, "w") as _fh:
+                            _fh.write(_dom)
+                        with open(_pf, "w") as _fh:
+                            _fh.write(_prob)
+                        _plan = _run_pyperplan(_df, _pf)
+
+                    if _plan is not None:
+                        _plan_strs = [str(op) for op in _plan]
+                        st.session_state["pddl_val_result"] = {
+                            "valid": True,
+                            "furniture": _act_data.get("furniture", ""),
+                            "n_steps": len(_plan),
+                            "plan": _plan_strs,
+                        }
+                    else:
+                        import pandas as _pd
+                        _diag_rows = []
+                        for c in _conns:
+                            pred = c.get("predicate", "")
+                            _diag_rows.append({
+                                "Connection": f"Part {c.get('part1')} → Part {c.get('part2')}",
+                                "Predicate": pred,
+                                "Achievable": pred in ("inserted", "pressed", "screwed"),
+                            })
+                        st.session_state["pddl_val_result"] = {
+                            "valid": False,
+                            "furniture": _act_data.get("furniture", ""),
+                            "diagnosis": _diag_rows,
+                        }
+                except Exception as _exc:
+                    st.error(f"Validation error: {_exc}")
+
+        _val = st.session_state.get("pddl_val_result")
+        if _val:
+            if _val["valid"]:
+                st.success(
+                    f"✓ Valid — plan found ({_val['n_steps']} actions) "
+                    f"for **{_val['furniture']}**"
+                )
+                try:
+                    from app_viz import make_plotly_plan_sequence
+                    _plan_fig = make_plotly_plan_sequence(_val["plan"])
+                    st.plotly_chart(_plan_fig, use_container_width=True)
+                    _plotly_download_buttons(_plan_fig, f"{_val.get('furniture', 'plan')}_sequence")
+                except Exception as _e:
+                    st.code("\n".join(_val["plan"]), language=None)
+            else:
+                st.error(f"✗ No valid plan found for **{_val['furniture']}**")
+                if "diagnosis" in _val:
+                    import pandas as _pd
+                    st.markdown("**Connection goal diagnosis:**")
+                    st.dataframe(
+                        _pd.DataFrame(_val["diagnosis"]),
+                        use_container_width=True, hide_index=True,
+                    )
 
 # ── Tab: Behavior Tree ────────────────────────────────────────────────────────
 with tab_bt:
+    import streamlit.components.v1 as components
+
     if "bt_error" in results:
         st.error(f"Behavior Tree generation failed: {results['bt_error']}")
-    elif "bt_ascii" in results or "bt_xml" in results:
-        import streamlit.components.v1 as components
+    elif "bt_xml" in results or "actions" in results:
+        # ── Causal dependency graph ────────────────────────────────────────────
+        if "actions" in results:
+            st.subheader("Causal Dependency Graph")
+            st.caption(
+                "Nodes = connection goals. "
+                "Edges = causal dependencies between connections (hover an edge for the rule). "
+                "Same color = same parallel group → compiled into a BT **Parallel** node. "
+                "Different groups = independent sub-tasks that can run concurrently."
+            )
+            try:
+                from app_viz import make_causal_graph_figure
+                _cg_fig = make_causal_graph_figure(results["actions"])
+                st.plotly_chart(_cg_fig, use_container_width=True)
+                _plotly_download_buttons(_cg_fig, f"{last[1]}_causal_graph")
+            except Exception as _e:
+                st.warning(f"Causal graph unavailable: {_e}")
+            st.divider()
 
-        st.subheader("Behavior Tree")
-
-        zoom_pct = st.slider(
-            "Zoom", min_value=25, max_value=300, value=100, step=25,
-            key="bt_zoom", format="%d%%",
+    if "bt_xml" in results:
+        st.subheader("Behavior Tree — Interactive View")
+        st.caption(
+            "Color key: "
+            "🟦 Sequence  🔴 Fallback  🟣 Parallel  🟢 Condition  🟠 Action  ⬛ Root  "
+            "— hover a node to see its attributes"
         )
 
-        if "bt_svg" in results and os.path.exists(results["bt_svg"]):
-            with open(results["bt_svg"], encoding="utf-8") as _f:
-                svg_content = _f.read()
-            scale = zoom_pct / 100
-            _html = (
-                '<div style="overflow:auto;width:100%;height:600px;'
-                'border:1px solid #ddd;border-radius:4px;">'
-                f'<div style="transform:scale({scale});transform-origin:top left;'
-                'display:inline-block;padding:8px;">'
-                f"{svg_content}"
-                "</div></div>"
+        try:
+            from app_viz import bt_xml_to_visjs_html
+            _visjs_html = bt_xml_to_visjs_html(results["bt_xml"])
+            components.html(_visjs_html, height=680, scrolling=False)
+            st.download_button(
+                "⬇ Download BT Interactive HTML",
+                data=_visjs_html,
+                file_name=f"{last[1]}_behavior_tree.html",
+                mime="text/html",
+                key="dl_bt_visjs",
             )
-            components.html(_html, height=620, scrolling=True)
-        elif "bt_png" in results:
-            img_width = max(200, int(900 * zoom_pct / 100))
-            st.image(results["bt_png"], width=img_width)
-        else:
-            st.info("PNG/SVG visualization not available (graphviz may not be installed).")
+        except Exception as _e:
+            st.warning(f"vis.js render failed ({_e}); falling back to ASCII.")
 
+        # BT image files (PNG / SVG) from pipeline output
+        _bt_img_cols = []
+        if results.get("bt_png") and os.path.exists(results["bt_png"]):
+            _bt_img_cols.append(("bt_png", results["bt_png"], "image/png", "⬇ Download BT PNG"))
+        if results.get("bt_svg") and os.path.exists(results["bt_svg"]):
+            _bt_img_cols.append(("bt_svg", results["bt_svg"], "image/svg+xml", "⬇ Download BT SVG"))
+        if _bt_img_cols:
+            _img_dl_cols = st.columns(len(_bt_img_cols))
+            for _col, (_key, _path, _mime, _label) in zip(_img_dl_cols, _bt_img_cols):
+                with open(_path, "rb") as _f:
+                    _col.download_button(
+                        _label, data=_f.read(),
+                        file_name=os.path.basename(_path),
+                        mime=_mime, key=f"dl_{_key}",
+                    )
+
+        st.divider()
         col_ascii, col_xml = st.columns(2)
         with col_ascii:
             st.markdown("**ASCII Tree**")
             st.code(results.get("bt_ascii", ""), language=None)
+            st.download_button(
+                "⬇ Download ASCII Tree",
+                data=results.get("bt_ascii", ""),
+                file_name=f"{last[1]}_behavior_tree.txt",
+                mime="text/plain",
+                key="dl_bt_ascii",
+            )
         with col_xml:
             with st.expander("behavior_tree.xml", expanded=False):
                 st.code(results.get("bt_xml", ""), language="xml")
+            st.download_button(
+                "⬇ Download BT XML",
+                data=results.get("bt_xml", ""),
+                file_name=f"{last[1]}_behavior_tree.xml",
+                mime="application/xml",
+                key="dl_bt_xml",
+            )
     else:
         st.info("Run the pipeline with Behavior Tree enabled to see output.")
+
+# ── Tab: BT Verification ──────────────────────────────────────────────────────
+with tab_bt_ltl:
+    st.subheader("Behavior Tree — LTL Property Verification")
+    st.caption(
+        "Uses BehaVerify (SEFM 2022) to convert the BT to a nuXmv model "
+        "and verify Linear Temporal Logic safety / liveness properties. "
+        "Requires the nuXmv binary in PATH for full model checking."
+    )
+
+    # ── 1. Predefined LTL properties (always visible) ──
+    st.markdown("**Standard Assembly Safety Properties**")
+    try:
+        from app_viz import get_ltl_properties
+        _ltl_props = get_ltl_properties()
+        for _prop_name, _ltl_formula in _ltl_props.items():
+            col_n, col_f = st.columns([1, 2])
+            col_n.markdown(f"*{_prop_name}*")
+            col_f.code(_ltl_formula, language=None)
+    except Exception as _e:
+        st.warning(f"Could not load LTL properties: {_e}")
+
+    st.divider()
+
+    # ── 2. nuXmv model display ──
+    st.markdown("**Generated nuXmv Model**")
+    if "bt_xml" not in results:
+        st.info("Run the pipeline with Behavior Tree enabled first.")
+    else:
+        try:
+            from app_viz import bt_to_nuxmv_model
+            _smv = bt_to_nuxmv_model(results["bt_xml"])
+            if _smv:
+                st.code(_smv, language=None)
+                st.download_button(
+                    "⬇ Download .smv",
+                    data=_smv,
+                    file_name=f"{last[1]}_bt.smv",
+                    mime="text/plain",
+                )
+            else:
+                st.info(
+                    "nuXmv model generation requires the `behaverify` package "
+                    "and its metamodel files to be present. "
+                    "Run: `pip install behaverify` and check the installation."
+                )
+        except Exception as _e:
+            st.warning(f"nuXmv model generation failed: {_e}")
+
+    st.divider()
+
+    # ── 3. BehaVerify .tree DSL preview (always, if bt_xml available) ──
+    if "bt_xml" in results:
+        with st.expander("BehaVerify .tree DSL (intermediate representation)", expanded=False):
+            try:
+                from app_viz import _bt_xml_to_behaverify_dsl
+                _dsl = _bt_xml_to_behaverify_dsl(results["bt_xml"])
+                st.code(_dsl or "Conversion failed.", language=None)
+            except Exception as _e:
+                st.warning(f"DSL conversion failed: {_e}")

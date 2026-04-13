@@ -30,7 +30,11 @@ dependencies = [
     "streamlit>=1.44.0",
     "pyyaml",
     "networkx>=3.6.1",
+    "plotly>=5.0.0", # interactive charts for app.py
     "pycocotools>=2.0.11",
+    # Formal BT compiler (stage5_bt_compile.py)
+    "pyperplan>=2.1", # pure-Python PDDL planner for plan grounding
+    "behaverify>=1.0.0", # LTL verification of BTs via nuXmv (nuXmv binary req'd for full check)
 ]
 
 [project.optional-dependencies]

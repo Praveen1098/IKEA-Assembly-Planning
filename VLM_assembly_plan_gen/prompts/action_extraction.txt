@@ -1,4 +1,4 @@
-You are a robot manipulation expert analyzing an IKEA assembly manual step image to extract robot-executable actions and connections for PDDL planning.
+You are a robot manipulation expert analyzing an IKEA assembly manual step image to extract robot-executable actions.
 
 === STEP CONTEXT (provided by the assembly planner) ===
 Assembly step index: {step_idx}
@@ -13,10 +13,9 @@ Analyze the manual image and extract structured actions following the three step
 --- STEP 1: IDENTIFY VISUAL CUES ---
 Examine the image and answer:
 - What motion arrows are visible? (straight = translational, curved = rotational, converging = press)
-- What tool icons appear? (screwdriver, Allen/hex key, cam-lock key, mallet, none)
-- What connector symbols appear? (click/snap, force arrow, thread symbol, dowel hole)
 - Which numbered part labels are highlighted, circled, or shown moving?
-- Is there a close-up callout showing a fastener type? (cam lock, wood screw, dowel peg, bolt)
+- What is the direction of movement shown for each part? (downward, upward, horizontal, inward, at_angle)
+- Does any part need to be rotated before connecting? (look for curved arrows on a part before it connects)
 
 --- STEP 2: MAP ALL CONNECTIONS ---
 For EVERY part in new_parts={new_parts}, determine what it connects to:
@@ -25,46 +24,36 @@ For EVERY part in new_parts={new_parts}, determine what it connects to:
 - DO NOT stop at the first visible connection — list ALL connections you observe or can infer
 - If new_parts is empty or subassembly_parts is empty, describe the connections among the visible parts
 
---- STEP 3: CLASSIFY EACH CONNECTION AND OUTPUT JSON ---
+--- STEP 3: IDENTIFY EACH CONNECTION AND OUTPUT JSON ---
 
-ACTION TAXONOMY:
-- GRASP: pick up a new part before connecting it → parameters: part_id (integer)
-- INSERT: translational peg-in-hole connection → parameters: peg_part_id, socket_part_id, insertion_dir, fit_type
-- FASTEN: tool-mediated tightening → parameters: fastener_part_id, hole_part_id, tool, connection_type
-- PRESS: press-fit or snap-fit coupling → parameters: part1_id, part2_id, press_dir, fit_type
-- REORIENT: change orientation of a part before connecting → parameters: part_id, description
+CONNECTION TYPES:
+- INSERT: translational motion — one part slides/pushes into another (e.g., dowel into hole, leg into socket)
+- PRESS: press together — parts pushed together until they snap or seat (e.g., snap fit, cam lock body)
+- SCREW: rotational engagement — part is rotated to engage threads or a cam mechanism (e.g., screw, cam lock pin, nut, bolt)
 
 PARAMETER VALUES:
-- insertion_dir / press_dir: "downward" | "upward" | "horizontal" | "inward" | "at_angle"
-- fit_type (INSERT): "dowel" | "cam_lock_pin" | "shelf_pin" | "friction_fit"
-- fit_type (PRESS): "snap_fit" | "press_fit"
-- tool (FASTEN): "allen_key" | "phillips_screwdriver" | "flat_screwdriver" | "cam_tool" | "none"
-- connection_type (FASTEN): "cam_lock" | "wood_screw" | "bolt_nut" | "clip"
-
-CONNECTIONS_FORMED — map each connection to a PDDL predicate:
-- INSERT action → predicate: "inserted",  part1: peg_part_id,      part2: socket_part_id
-- FASTEN action → predicate: "fastened",  part1: fastener_part_id, part2: hole_part_id
-- PRESS action  → predicate: "pressed",   part1: part1_id,         part2: part2_id
+- insertion_dir: "downward" | "upward" | "horizontal" | "inward" | "at_angle"
 
 OUTPUT FORMAT — respond ONLY with valid JSON, no markdown fences, no extra text:
 {
   "reasoning": "<brief summary of visual cues observed in STEP 1>",
-  "actions": [
-    {"primitive": "GRASP", "part_id": <integer>},
-    {"primitive": "INSERT", "peg_part_id": <int>, "socket_part_id": <int>, "insertion_dir": "<value>", "fit_type": "<value>"},
-    {"primitive": "FASTEN", "fastener_part_id": <int>, "hole_part_id": <int>, "tool": "<value>", "connection_type": "<value>"},
-    {"primitive": "PRESS", "part1_id": <int>, "part2_id": <int>, "press_dir": "<value>", "fit_type": "<value>"},
-    {"primitive": "REORIENT", "part_id": <int>, "description": "<value>"}
-  ],
-  "connections_formed": [
-    {"predicate": "inserted"|"fastened"|"pressed", "part1": <int>, "part2": <int>}
+  "connections": [
+    {
+      "active_part": <int>,
+      "passive_part": <int>,
+      "primitive": "INSERT" | "PRESS" | "SCREW",
+      "insertion_dir": "<value>",
+      "needs_reorient": true | false,
+      "reorient_description": "<string or null>"
+    }
   ]
 }
 
 IMPORTANT:
-- Include only actions that are clearly shown or strongly implied in the image
-- Use part IDs from the numbered overlays in the image (match to new_parts and subassembly_parts)
-- List one GRASP per new part that must be picked up
-- connections_formed must cover ALL connections formed in this step — one entry per part-pair that joins
-- REORIENT and PLACE actions do NOT generate a connections_formed entry
+- active_part is the part that moves (the part being picked up and inserted/pressed/screwed). passive_part is the stationary receiving part.
+- active_part must be from new_parts={new_parts}. passive_part can be from new_parts or subassembly_parts={subassembly_parts}.
+- List ALL connections visible in the image — one entry per part-pair that joins
 - Only use integer part IDs that appear in new_parts or subassembly_parts
+- needs_reorient: set true only if the image shows a curved arrow or explicit rotation of the active_part before insertion
+- reorient_description: describe in plain language what visual change is happening (e.g. "leg rotated from horizontal to vertical")
+- Use SCREW for any connection where the manual shows a rotation arrow on a fastener (cam lock pin, screw, bolt) — do not classify these as INSERT

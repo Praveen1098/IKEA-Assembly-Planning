@@ -8,14 +8,14 @@ from tqdm import tqdm
 # Add VLM_assembly_plan_gen/ to path so llm/ package is importable
 sys.path.append(str(Path(__file__).parent.parent))
 
-from config import MANUAL_DATA_PATH, OUTPUT_DIR, RECIPE_PATH, DATA_DIR
+from config import MANUAL_DATA_PATH, OUTPUT_DIR, RECIPE_PATH
 from llm.model import load_llm_from_recipe
 from utils import load_json
 from stage1_associate import select_materials_for_planning
 from stage2_planning import create_plan
 from convert import convert_to_tree
 from stage3_action_extraction import extract_actions
-from stage4_formalize import to_pddl, to_behavior_tree
+from stage4_formalize import to_behavior_tree
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -27,12 +27,15 @@ def parse_args():
     p.add_argument("--prompt_type",  type=str, default="numbered")
     p.add_argument("--scene_type",   type=str, default="original")
     p.add_argument("--output_format", type=str, default="tree",
-                   choices=["tree", "actions", "pddl", "bt"],
-                   help="Output format: tree (default) | actions | pddl | bt. "
-                        "'actions' runs Stage 3 only. 'pddl'/'bt' run Stages 3+4.")
-    p.add_argument("--use_sam2", action="store_true",
-                   help="Use SAM2-generated masks from data/sam2_mask/ instead of "
-                        "pre-computed masks in data/mask/")
+                   choices=["tree", "actions", "bt"],
+                   help="Output format: tree (default) | actions | bt. "
+                        "'actions' runs Stage 3 only (outputs actions.json). "
+                        "'bt' runs Stages 3+4: outputs actions.json, behavior_tree.xml, "
+                        "and behavior_tree.txt (ASCII).")
+    p.add_argument("--validate_pddl", action="store_true",
+                   help="Run Stage 3.5 PDDL consistency check on actions.json "
+                        "(requires pyperplan: pip install pyperplan). "
+                        "Only active when --output_format is 'actions' or 'bt'.")
     return p.parse_args()
 
 def main():
@@ -45,38 +48,30 @@ def main():
     # Load main pipeline LLM once for all items
     llm = load_llm_from_recipe(RECIPE_PATH, args.model)
 
-    # SAM2 mask directory override
-    mask_dir = os.path.join(DATA_DIR, "sam2_mask") if args.use_sam2 else None
-    if args.use_sam2:
-        if not os.path.isdir(mask_dir):
-            print(f"ERROR: SAM2 mask directory not found: {mask_dir}")
-            print("Run `python -m part_segmentation.predict` first to generate masks.")
-            sys.exit(1)
-        print(f"Using SAM2 masks from: {mask_dir}")
-
     for idx in tqdm(range(args.start, min(args.end, len(data))), desc="Generating Assembly Graphs"):
         item = data[idx]
         name, cat = item["name"], item["category"]
 
         stage1_output = select_materials_for_planning(name, cat, output_path, args, llm)
 
-        stage2_output = create_plan(name, cat, output_path, stage1_output, args, mask_dir=mask_dir, llm=llm)
+        stage2_output = create_plan(name, cat, output_path, stage1_output, args, llm=llm)
 
         convert_to_tree(name, cat, output_path, stage2_output, args, llm)
 
         print(f"Generated Assembly Graph for Furniture Item {cat}\\{name} at {output_path}/{cat}/{name}/tree.json")
 
-        if args.output_format in ("actions", "pddl", "bt"):
+        if args.output_format in ("actions", "bt"):
             actions_data = extract_actions(
                 name, cat, output_path, stage2_output, stage1_output, args, llm
             )
             print(f"Extracted robot actions for {cat}\\{name} → {output_path}/{cat}/{name}/actions.json")
 
-            if args.output_format == "pddl":
-                domain_path, problem_path = to_pddl(actions_data, output_path)
-                print(f"Generated PDDL for {cat}\\{name} → {problem_path}")
+            if args.validate_pddl:
+                from stage3_5_pddl_validate import validate_actions_json
+                actions_path = os.path.join(output_path, cat, name, "actions.json")
+                validate_actions_json(actions_path, verbose=True)
 
-            elif args.output_format == "bt":
+            if args.output_format == "bt":
                 bt_path = to_behavior_tree(actions_data, output_path)
                 print(f"Generated Behavior Tree for {cat}\\{name} → {bt_path}")
 

@@ -1,20 +1,25 @@
 """Stage 3: Robot Action Extraction from assembly manual images.
 
 Design principles (literature-grounded):
-  - VLM-as-formalizer: VLM fills action parameters; code composes PDDL (not VLM).
+  - VLM-as-formalizer: VLM identifies connections; code composes the BT (not VLM).
     Source: "Vision Language Models Cannot Plan, but Can They Formalize?" (arXiv 2509.21576)
-  - 3-step CoT prompting: visual cues → connection mapping → parameter classification.
+  - 3-step CoT prompting: visual cues → connection mapping → parameter extraction.
     Source: SPAR (2509.13691), NL2Plan (2405.04215)
   - Exhaustive connection enumeration: prompt explicitly asks for ALL connections
     because "VLMs fail to capture exhaustive object relations". (arXiv 2509.21576)
+  - Iterative refinement loop: if any new_part lacks a connection after the initial
+    VLM call, re-prompt with a targeted follow-up naming missing parts explicitly.
+    Source: arXiv 2409.09435 — "BT Generation using LLMs with Human Instructions and Feedback"
+  - VLM-evaluated condition nodes: visual_description on each connection enables
+    a robot VLM to verify assembly state from camera at runtime (arXiv 2501.03968).
   - Post-VLM completeness check: every new_part must appear in at least one connection.
 
-Taxonomy (Johannsmeier et al. 2025; Ahn et al. 2023; Nemec et al. 2011):
-  GRASP    — Positioning: pick up a part  (no spatial params — not needed for PDDL)
-  INSERT   — Coupling/Peg-in-hole: translate into socket
-  FASTEN   — Coupling+Tooling: tighten with a tool
-  PRESS    — Coupling: push together (snap-fit or press-fit)
-  REORIENT — Positioning: change part orientation
+Taxonomy (parts-only, no connector/fastener details):
+  GRASP    — Positioning: pick up a part
+  INSERT   — Coupling: translate one part into another (direction observed visually)
+  PRESS    — Coupling: push parts together until seated
+  SCREW    — Coupling: rotate part to engage threads or cam (screw, cam lock pin, bolt)
+  REORIENT — Positioning: rotate part before connecting (curved arrow in manual image)
 
 Inputs (no ground-truth data):
   - tree.json from convert.py → drives step sequence via post-order traversal
@@ -37,8 +42,8 @@ from config import DATA_DIR, PROMPTS_DIR
 from utils import encode_image, ensure_dir
 
 
-VALID_PRIMITIVES = {"GRASP", "INSERT", "FASTEN", "PRESS", "REORIENT", "PLACE"}
-CONNECTION_PRIMITIVES = {"INSERT", "FASTEN", "PRESS"}   # these form PDDL connections
+VALID_PRIMITIVES = {"GRASP", "INSERT", "PRESS", "SCREW", "REORIENT"}
+CONNECTION_PRIMITIVES = {"INSERT", "PRESS", "SCREW"}   # these form BT connection goals
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +187,114 @@ def _clean_json(raw: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Connection-driven action generation (replaces VLM-generated action sequences)
+# ---------------------------------------------------------------------------
+
+def _generate_actions_from_connections(connections: list[dict]) -> list[dict]:
+    """Deterministically build a robot action sequence from VLM-identified connections.
+
+    Rule: GRASP(active) → [REORIENT(active)?] → INSERT/PRESS(active, passive)
+    INSERT/PRESS release the gripper, so if the same active_part appears in
+    multiple connections it is re-grasped before each subsequent connection.
+
+    No connector/fastener details (fit_type removed). Keys match BT XML attributes.
+    """
+    held: int | None = None
+    ever_reoriented: set[int] = set()
+    actions: list[dict] = []
+
+    for conn in connections:
+        active = conn.get("active_part")
+        passive = conn.get("passive_part")
+        prim = conn.get("primitive")
+
+        if active is None or passive is None or prim not in CONNECTION_PRIMITIVES:
+            continue
+
+        # GRASP if not currently held
+        if held != active:
+            actions.append({"primitive": "GRASP", "part_id": active})
+            held = active
+
+        # REORIENT once per active_part per step
+        if conn.get("needs_reorient") and active not in ever_reoriented:
+            actions.append({
+                "primitive": "REORIENT",
+                "part_id": active,
+                "description": conn.get("reorient_description") or "reorient before connecting",
+            })
+            ever_reoriented.add(active)
+
+        # Emit connection primitive — keys match BT XML Action attributes
+        if prim == "INSERT":
+            actions.append({
+                "primitive": "INSERT",
+                "active_part": active,
+                "passive_part": passive,
+                "direction": conn.get("insertion_dir", "horizontal"),
+            })
+        elif prim == "PRESS":
+            actions.append({
+                "primitive": "PRESS",
+                "active_part": active,
+                "passive_part": passive,
+                "direction": conn.get("insertion_dir", "downward"),
+            })
+        elif prim == "SCREW":
+            actions.append({
+                "primitive": "SCREW",
+                "active_part": active,
+                "passive_part": passive,
+                "direction": conn.get("insertion_dir", "inward"),
+            })
+
+        held = None  # INSERT/PRESS/SCREW release the gripper
+
+    return actions
+
+
+def _connections_to_connections_formed(connections: list[dict], step: dict) -> list[dict]:
+    """Convert VLM connection list to connections_formed format for BT goal tracking.
+
+    Each entry carries:
+      predicate, part1, part2      — connection identity
+      active_part, passive_part    — BT action parameters
+      direction                    — motion direction (visual, from insertion_dir)
+      needs_reorient               — whether a reorient action precedes this connection
+      reorient_description         — natural language reorient instruction
+      visual_description           — NL cue for VLM-evaluated IsConnected condition node;
+                                     a robot VLM reads this + camera image at runtime to
+                                     verify the connection is complete (arXiv 2501.03968)
+    """
+    pred_map = {"INSERT": "inserted", "PRESS": "pressed", "SCREW": "screwed"}
+    stage2_ctx = step.get("stage2_description", "").strip()
+    result = []
+    for conn in connections:
+        prim = conn.get("primitive")
+        if prim in pred_map:
+            p1 = conn["active_part"]
+            p2 = conn["passive_part"]
+            direction = conn.get("insertion_dir", "downward")
+            predicate = pred_map[prim]
+            visual_description = (
+                f"Part {p1} is {predicate} into part {p2} "
+                f"(direction: {direction}). Context: {stage2_ctx}"
+            )
+            result.append({
+                "predicate": predicate,
+                "part1": p1,
+                "part2": p2,
+                "active_part": p1,
+                "passive_part": p2,
+                "direction": direction,
+                "needs_reorient": conn.get("needs_reorient", False),
+                "reorient_description": conn.get("reorient_description") or "reorient before connecting",
+                "visual_description": visual_description,
+            })
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Post-VLM validation
 # ---------------------------------------------------------------------------
 
@@ -214,6 +327,79 @@ def _validate_connections(
                 print(msg)
 
     return warnings
+
+
+# ---------------------------------------------------------------------------
+# Iterative refinement loop (arXiv 2409.09435)
+# ---------------------------------------------------------------------------
+
+def _refinement_loop(
+    llm,
+    b64_img: str,
+    initial_result: dict,
+    new_parts: list[int],
+    max_rounds: int = 2,
+) -> dict:
+    """Re-prompt VLM for any new_parts absent from the initial connection list.
+
+    If the first VLM call misses connections for some new_parts, a targeted
+    follow-up is sent naming exactly which parts need connections.  New
+    connections are merged into the result (no duplicates by active+passive key).
+
+    Literature: arXiv 2409.09435 — "Behavior Tree Generation using Large
+    Language Models for Sequential Manipulation Planning with Human Instructions
+    and Feedback" — uses iterative feedback to improve coverage completeness.
+    """
+    from llm.utils import invoke_multimodal
+
+    result = dict(initial_result)
+    if result.get("parse_error"):
+        return result
+
+    for _ in range(max_rounds):
+        covered = {c["active_part"] for c in result.get("connections", [])
+                   if isinstance(c.get("active_part"), int)}
+        missing = [p for p in new_parts if p not in covered]
+        if not missing:
+            break  # all parts have at least one connection
+
+        refinement_prompt = (
+            f"In your previous response you identified connections for parts "
+            f"{sorted(covered)}. However, the following parts from new_parts "
+            f"were NOT given any connections: {missing}.\n\n"
+            f"Looking at the assembly image again, what does each of these "
+            f"parts connect to, and what is the connection type "
+            f"(INSERT, PRESS, or SCREW)? "
+            f"Reply in the same JSON format as before, listing ONLY the missing "
+            f"connections (do not repeat already-found ones)."
+        )
+
+        raw = invoke_multimodal(llm, refinement_prompt, [b64_img], mime_type="image/jpeg")
+        cleaned = _clean_json(raw)
+        try:
+            extra = json.loads(cleaned)
+        except json.JSONDecodeError:
+            break  # unparseable; stop refining
+
+        new_conns = extra.get("connections", []) if isinstance(extra, dict) else []
+        if not new_conns:
+            break
+
+        existing_keys = {
+            (c["active_part"], c["passive_part"])
+            for c in result.get("connections", [])
+            if isinstance(c.get("active_part"), int) and isinstance(c.get("passive_part"), int)
+        }
+        for conn in new_conns:
+            ap = conn.get("active_part")
+            pp = conn.get("passive_part")
+            if isinstance(ap, int) and isinstance(pp, int):
+                key = (ap, pp)
+                if key not in existing_keys:
+                    result.setdefault("connections", []).append(conn)
+                    existing_keys.add(key)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -310,28 +496,29 @@ def extract_actions(
                 "connections_formed": [],
             }
 
+        # --- Iterative refinement: re-prompt for any new_parts without connections ---
+        # Literature: arXiv 2409.09435 (targeted follow-up for coverage completeness)
+        step_actions = _refinement_loop(llm, b64_img, step_actions, new_parts)
+
         # --- Discard unreliable VLM-generated bookkeeping fields ---
         for key in ("step_id", "parts_involved", "preconditions", "effects"):
             step_actions.pop(key, None)
 
-        # --- Inject authoritative tree-derived fields ---
+        # --- Inject authoritative tree-derived fields (before connections_formed so
+        #     stage2_description is available for visual_description generation) ---
         step_actions["step_idx"] = step_idx
         step_actions["new_parts"] = new_parts
         step_actions["subassembly_parts"] = subassembly_parts
         step_actions["all_parts"] = step["all_parts"]
         step_actions["stage2_description"] = step_text
 
-        # --- Validate primitive names ---
-        for action in step_actions.get("actions", []):
-            prim = action.get("primitive", "")
-            if prim not in VALID_PRIMITIVES:
-                action["primitive_warning"] = (
-                    f"Unknown primitive '{prim}'; "
-                    f"expected one of {sorted(VALID_PRIMITIVES)}"
-                )
+        # --- Generate action sequence and connections_formed from VLM-identified connections ---
+        connections = step_actions.get("connections", [])
+        step_actions["actions"] = _generate_actions_from_connections(connections)
+        step_actions["connections_formed"] = _connections_to_connections_formed(connections, step_actions)
 
         # --- Post-VLM connection completeness check ---
-        connections_formed = step_actions.get("connections_formed", [])
+        connections_formed = step_actions["connections_formed"]
         warnings = _validate_connections(
             step_idx, new_parts, connections_formed, args.debug
         )
