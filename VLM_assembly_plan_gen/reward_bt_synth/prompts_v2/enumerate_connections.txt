@@ -1,0 +1,20 @@
+You are analyzing the final-assembly image of an IKEA furniture item.
+
+The full parts inventory is: [{parts_inventory}]
+
+Task: enumerate EVERY connection (pair of directly-joined parts) in the
+fully-assembled furniture.
+
+Output a JSON array of two-integer arrays. Each sub-array `[a, b]` denotes
+that parts a and b are directly connected. Example:
+
+    [[0, 1], [1, 2], [2, 3]]
+
+Requirements (hard):
+  - Every part id in the inventory must appear in at least one connection.
+  - The induced graph (parts as nodes, connections as edges) must be
+    a single connected component — no isolated parts, no disconnected
+    sub-assemblies.
+  - Each unordered pair {{a, b}} must appear at most once.
+  - Output ONLY the JSON array. No prose before or after. No markdown
+    code fences.{retry_hint}

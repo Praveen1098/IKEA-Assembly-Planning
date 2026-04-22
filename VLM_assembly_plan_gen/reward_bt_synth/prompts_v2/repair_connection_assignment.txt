@@ -1,0 +1,22 @@
+A previous attempt to assign connections to steps left the following
+connections without any step assignment:
+
+    {missing_connections}
+
+You are given the {num_pages} manual pages as images, numbered 1..{num_pages}
+in assembly order.
+
+Task: for EACH missing connection, identify the step number
+(1..{num_pages}) at which that connection is formed in the manual.
+
+Output a JSON array, one entry per missing connection:
+
+    [
+      {{"connection": [a, b], "step": n}},
+      ...
+    ]
+
+Requirements (hard):
+  - Cover every missing connection exactly once.
+  - Do NOT introduce connections not in the missing set.
+  - Output ONLY the JSON array. No prose, no markdown code fences.

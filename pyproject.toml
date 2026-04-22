@@ -20,7 +20,7 @@ dependencies = [
     "numpy",
     "scikit-learn",
     "matplotlib",
-    "opencv-python", # scene_gen/annotator.py
+    "opencv-contrib-python>=4.9", # scene_gen/annotator.py; contrib build adds ximgproc.LSD for fdcm_pose
     "Pillow", # PIL image handling for supervision annotators
     "supervision>=0.26.0", # Gemini 2.5 bbox annotation (sv.VLM.GOOGLE_GEMINI_2_5)
     # Behavior tree generation and visualization (stage4_formalize.py)
@@ -35,6 +35,8 @@ dependencies = [
     # Formal BT compiler (stage5_bt_compile.py)
     "pyperplan>=2.1", # pure-Python PDDL planner for plan grounding
     "behaverify>=1.0.0", # LTL verification of BTs via nuXmv (nuXmv binary req'd for full check)
+    # Patent IDR deck generator (scripts/generate_patent_pptx.py)
+    "python-pptx>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +51,15 @@ pose-estimation = [
     "h5py",
     "einops",
     "wandb",
+]
+
+# FDCM-based part detection + pose estimation module (VLM_assembly_plan_gen/fdcm_pose).
+# Install with: uv sync --extra fdcm
+fdcm = [
+    "scikit-image>=0.22",
+    "scipy>=1.11",
+    "trimesh>=4.0",
+    "pytest>=8.0",
 ]
 
 [tool.uv]

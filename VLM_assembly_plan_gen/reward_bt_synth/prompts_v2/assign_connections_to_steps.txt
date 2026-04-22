@@ -1,0 +1,24 @@
+You are analyzing the step-by-step assembly of an IKEA furniture item.
+
+You are given:
+  1. The enumerated set of connections present in the final assembly:
+     {connections}
+  2. {num_pages} manual pages (as images), numbered 1..{num_pages} in
+     assembly order.
+
+Task: for EACH enumerated connection, identify the step number
+(1..{num_pages}) at which that connection is first formed in the manual.
+
+Output a JSON array, one entry per connection:
+
+    [
+      {{"connection": [a, b], "step": n}},
+      ...
+    ]
+
+Requirements (hard):
+  - Every enumerated connection MUST appear in the output, exactly once.
+  - Do NOT introduce connections that were not in the enumerated set.
+  - Step numbers are 1-based and must form the set {{1, 2, ..., N}} with no
+    gaps (multiple connections may share the same step).
+  - Output ONLY the JSON array. No prose, no markdown code fences.
