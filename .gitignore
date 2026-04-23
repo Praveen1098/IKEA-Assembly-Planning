@@ -25,7 +25,6 @@ docs
 outputs/
 .pytest_cache/
 
-data/
 VLM_assembly_plan_gen/reward_bt_outputs/
 VLM_assembly_plan_gen/reward_bt_outputs_vlm/
 VLM_assembly_plan_gen/reward_bt_synth/tests
