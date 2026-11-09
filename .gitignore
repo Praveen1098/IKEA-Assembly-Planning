@@ -21,7 +21,7 @@ pose_estimation/pose_estimation/wandb/
 */__pycache__/
 .claude/
 .superpowers/
-docs
+docs/superpowers/
 outputs/
 .pytest_cache/
 

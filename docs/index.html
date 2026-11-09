@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manuals to Robot Execution · Behavior Trees for Assembly</title>
+<meta name="description" content="From Graphical Manuals to Robot Execution: Task and Skill-Level Behavior Trees for Assembly">
+<link rel="canonical" href="https://praveen1098.github.io/IKEA-Assembly-Planning/"><meta property="og:url" content="https://praveen1098.github.io/IKEA-Assembly-Planning/"><meta property="og:title" content="From Graphical Manuals to Robot Execution: Task and Skill-Level Behavior Trees for Assembly"><meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+<style>
+:root{--bg:#0b0d10;--panel:#12161b;--line:#222a33;--fg:#e8ecf1;--mute:#97a3b1;--acc:#7aa2ff;--ok:#34d399;--bad:#f87171}
+*{box-sizing:border-box} html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+a{color:var(--acc);text-decoration:none} .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+header{position:relative;display:flex;align-items:flex-end;overflow:hidden;padding-top:120px;background:radial-gradient(1200px 520px at 75% 0%,rgba(122,162,255,.16),transparent 60%),radial-gradient(900px 480px at 0% 100%,rgba(52,211,153,.08),transparent 60%)} header.video{min-height:88vh} header .wrap{width:100%}
+header video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55}
+header:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,13,16,.2) 0%,rgba(11,13,16,.6) 55%,var(--bg) 100%)}
+.hero{position:relative;z-index:1;padding-bottom:64px}
+.venue{display:inline-block;border:1px solid var(--line);background:rgba(18,22,27,.7);border-radius:999px;padding:4px 14px;
+  font-size:13px;color:var(--mute);letter-spacing:.04em;text-transform:uppercase}
+h1{font-size:clamp(30px,4.4vw,56px);line-height:1.08;letter-spacing:-.02em;margin:18px 0 18px;max-width:22ch}
+.authors{font-size:17px} .authors span{white-space:nowrap} .affil{color:var(--mute);font-size:14px;margin-top:6px}
+.links{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
+.links a{border:1px solid var(--line);background:rgba(18,22,27,.8);color:var(--fg);padding:10px 18px;border-radius:12px;font-weight:600}
+.links a:hover{border-color:var(--acc)}
+section{padding:72px 0;border-top:1px solid var(--line)}
+h2{font-size:clamp(24px,2.6vw,34px);letter-spacing:-.015em;margin:0 0 10px} .lead{color:var(--mute);max-width:70ch;margin:0 0 36px}
+.tldr{font-size:19px;max-width:72ch}
+.demos{display:grid;gap:28px}
+.demo{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:24px;background:var(--panel);border:1px solid var(--line);
+  border-radius:20px;padding:16px;align-items:center}
+.frame{border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9} .frame video{width:100%;height:100%;display:block}
+.meta h3{margin:0;font-size:28px;letter-spacing:-.01em} .meta h3 span{font-weight:400;color:var(--mute);font-size:18px}
+.sub{color:var(--mute);margin:6px 0 14px;font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px} .chips i,.chips b{font-style:normal;font-size:13px;padding:4px 10px;border-radius:999px;border:1px solid var(--line)}
+.chips b.ok{color:#062b1f;background:var(--ok);border-color:var(--ok)} .chips b.bad{color:#2b0606;background:var(--bad);border-color:var(--bad)}
+.replay{font:600 14px Inter,sans-serif;color:var(--fg);background:transparent;border:1px solid var(--acc);border-radius:10px;padding:8px 14px;cursor:pointer}
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;counter-reset:s}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}
+.step:before{counter-increment:s;content:counter(s);display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;
+  background:var(--acc);color:#0b0d10;font-weight:700;margin-bottom:10px}
+.step h4{margin:0 0 6px;font-size:17px} .step p{margin:0;color:var(--mute);font-size:14px}
+.nums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.num{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px} .num b{font-size:34px;letter-spacing:-.02em;display:block}
+.num span{color:var(--mute);font-size:14px}
+.viewer{display:none;position:fixed;inset:0;z-index:10;background:rgba(5,6,8,.86);backdrop-filter:blur(8px);place-items:center}
+.viewer.on{display:grid} .viewer model-viewer{width:min(1100px,92vw);height:min(70vh,640px);background:#14181e;border-radius:18px}
+.viewer button{position:absolute;top:22px;right:26px}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;overflow-x:auto;font-size:13px;color:#c9d4e2}
+footer{color:var(--mute);font-size:13px;padding:40px 0 60px}
+@media (max-width:860px){.demo{grid-template-columns:1fr} .steps,.nums{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.steps,.nums{grid-template-columns:1fr}}
+</style></head><body>
+<header>
+ <div class="wrap hero">
+  <span class="venue">LEAP Workshop · CoRL 2026</span>
+  <h1>From Graphical Manuals to Robot Execution: Task and Skill-Level Behavior Trees for Assembly</h1>
+  <div class="authors"><span>Praveen Kumar Menaka Sekar<sup>1,†</sup></span>, <span>Charles A. Meehan<sup>1,†</sup></span>, <span>Ion Matei<sup>2</sup></span>, <span>Hon Yung Wong<sup>2</sup></span>, <span>John S. Baras<sup>3</sup></span></div>
+  <div class="affil"><sup>1</sup>University of Maryland, Mechanical Engineering · <sup>2</sup>Fujitsu Research of America · <sup>3</sup>University of Maryland, Electrical Engineering · <sup>†</sup>equal contribution</div>
+  <div class="links"><a href="#bibtex">BibTeX</a></div>
+ </div>
+</header>
+<main class="wrap">
+<section><h2>TL;DR</h2>
+<p class="tldr">A robot reads an IKEA manual with an off-the-shelf vision-language model, plans where to inspect its work and
+when to ask a person, and then assembles the product in physics simulation, inspecting, repairing and asking for help
+only where the plan says it pays off.</p></section>
+
+
+
+<section><h2>How it works</h2>
+<div class="steps">
+ <div class="step"><h4>Read the manual</h4><p>An off-the-shelf VLM answers one yes/no question per part and manual step.</p></div>
+ <div class="step"><h4>Decode a plan with risk</h4><p>A decoder combines the answers into an assembly plan with an error probability for every step.</p></div>
+ <div class="step"><h4>Synthesize the behavior tree</h4><p>A dynamic program places inspections and operator queries at minimum cost under a bound on undetected failures.</p></div>
+ <div class="step"><h4>Execute with skills</h4><p>Every assembly action expands into a skill-level tree whose skills run only inside success regions measured in simulation.</p></div>
+</div></section>
+
+<section><h2>Results in the paper</h2>
+<div class="nums">
+ <div class="num"><b>42%</b><span>assembly operations recovered by the decoder on 21 products (8B VLM), vs 21% for a single plan query</span></div>
+ <div class="num"><b>5×</b><span>fewer undetected failures from asking the operator about likely misread steps</span></div>
+ <div class="num"><b>14–21%</b><span>lower cost than inspection-only rules at equal risk</span></div>
+ <div class="num"><b>9 / 10</b><span>runs complete the SUNDVIK chair frame in simulation</span></div>
+</div></section>
+
+<section id="bibtex"><h2>BibTeX</h2>
+<pre>@inproceedings{menakasekar2026manuals,
+  title     = {From Graphical Manuals to Robot Execution: Task and Skill-Level Behavior Trees for Assembly},
+  author    = {Menaka Sekar, Praveen Kumar and Meehan, Charles A. and Matei, Ion and Wong, Hon Yung and Baras, John S.},
+  booktitle = {CoRL 2026 Workshop on Learning Effective Abstractions for Planning (LEAP)},
+  year      = {2026}
+}</pre></section>
+</main>
+<div class="viewer" id="viewer"><model-viewer id="mv" camera-controls autoplay shadow-intensity="1" exposure="1.05"
+  environment-image="neutral" interaction-prompt="none"></model-viewer><button class="replay" id="close">Close</button></div>
+<footer class="wrap">Videos: simulation (MuJoCo), path-traced replay of recorded states. Every run is reported with its seed.</footer>
+<script>
+const v=document.getElementById('viewer'),mv=document.getElementById('mv');
+document.querySelectorAll('button[data-src]').forEach(b=>b.onclick=()=>{mv.src=b.dataset.src;v.classList.add('on')});
+document.getElementById('close').onclick=()=>{v.classList.remove('on');mv.removeAttribute('src')};
+</script>
+</body></html>
