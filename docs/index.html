@@ -23,7 +23,7 @@ h1{font-size:clamp(30px,4.4vw,56px);line-height:1.08;letter-spacing:-.02em;margi
 .links a{border:1px solid var(--line);background:rgba(18,22,27,.8);color:var(--fg);padding:10px 18px;border-radius:12px;font-weight:600}
 .links a:hover{border-color:var(--acc)}
 section{padding:72px 0;border-top:1px solid var(--line)}
-h2{font-size:clamp(24px,2.6vw,34px);letter-spacing:-.015em;margin:0 0 10px} .lead{color:var(--mute);max-width:70ch;margin:0 0 36px}
+h2{font-size:clamp(24px,2.6vw,34px);letter-spacing:-.015em;margin:0 0 10px} .lead{color:var(--mute);max-width:70ch;margin:0 0 36px} .note{color:var(--mute);font-size:14px;max-width:90ch;margin:28px 0 0}
 .tldr{font-size:19px;max-width:72ch}
 .demos{display:grid;gap:28px}
 .demo{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:24px;background:var(--panel);border:1px solid var(--line);
@@ -56,7 +56,7 @@ footer{color:var(--mute);font-size:13px;padding:40px 0 60px}
   <h1>From Graphical Manuals to Robot Execution: Task and Skill-Level Behavior Trees for Assembly</h1>
   <div class="authors"><span>Praveen Kumar Menaka Sekar<sup>1,†</sup></span>, <span>Charles A. Meehan<sup>1,†</sup></span>, <span>Ion Matei<sup>2</sup></span>, <span>Hon Yung Wong<sup>2</sup></span>, <span>John S. Baras<sup>3</sup></span></div>
   <div class="affil"><sup>1</sup>University of Maryland, Mechanical Engineering · <sup>2</sup>Fujitsu Research of America · <sup>3</sup>University of Maryland, Electrical Engineering · <sup>†</sup>equal contribution</div>
-  <div class="links"><a href="#bibtex">BibTeX</a></div>
+  <div class="links"><a href="#demos">Demos</a><a href="#bibtex">BibTeX</a></div>
  </div>
 </header>
 <main class="wrap">
@@ -66,6 +66,51 @@ when to ask a person, and then assembles the product in physics simulation, insp
 only where the plan says it pays off.</p></section>
 
 
+<section id="demos"><h2>Autonomous assembly from the manual</h2>
+<p class="lead">Each clip is one uncut run: the robot starts from the manual pages and the parts on the table. Contact
+phases play at 2&times; slow motion, transport at up to 8&times;; operator queries and inspections are shown as they
+happened. Physics is MuJoCo with the published skill parameters; the images are a path-traced replay of the recorded
+states.</p>
+<div class="demos">
+    <article class="demo">
+      <div class="frame"><video src="media/sundvik.mp4" poster="media/sundvik.jpg" controls muted playsinline
+        preload="metadata"></video></div>
+      <div class="meta">
+        <h3>SUNDVIK <span>chair frame</span></h3>
+        <p class="sub">4 parts · 2 steps · 6 dowels · Manual2Skill++ benchmark CAD</p>
+        
+        <p class="chips"><b class="ok">assembled autonomously</b><i>seed 318</i><i>362 s simulated</i><i>1 operator query</i><i>0 help requests</i></p>
+        
+      </div>
+    </article>
+    <article class="demo">
+      <div class="frame"><video src="media/mammut.mp4" poster="media/mammut.jpg" controls muted playsinline
+        preload="metadata"></video></div>
+      <div class="meta">
+        <h3>MAMMUT <span>children&#x27;s stool</span></h3>
+        <p class="sub">5 parts · 1 step · 8 dowels · IKEA-Manual meshes, metric CAD derived</p>
+        <p class="sub">4 of 4 recorded runs assembled, all with operator help (seeds 0, 1, 2, 3)</p>
+        <p class="chips"><b class="ok">assembled with operator help</b><i>seed 0</i><i>81 s simulated</i><i>1 operator query</i><i>1 help request</i></p>
+        
+      </div>
+    </article>
+    <article class="demo">
+      <div class="frame"><video src="media/kyrre.mp4" poster="media/kyrre.jpg" controls muted playsinline
+        preload="metadata"></video></div>
+      <div class="meta">
+        <h3>KYRRE <span>stool</span></h3>
+        <p class="sub">4 parts · 1 step · 6 dowels · IKEA-Manual meshes, metric CAD derived</p>
+        <p class="sub">3 of 4 recorded runs assembled, all with operator help (seeds 0, 1, 2, 3)</p>
+        <p class="chips"><b class="ok">assembled with operator help</b><i>seed 0</i><i>142 s simulated</i><i>0 operator queries</i><i>1 help request</i></p>
+        
+      </div>
+    </article></div>
+<p class="note">How these runs were produced. Operator queries and help requests are answered by a simulated operator
+that reads the dataset's ground-truth annotations, as in the paper's evaluation; a help request means the operator
+completed that step. SUNDVIK uses the Manual2Skill++ CAD. MAMMUT and KYRRE use CAD derived from the IKEA-Manual meshes,
+scaled to the catalogue height, with 8&nbsp;mm dowel joints; KYRRE's real hardware is screws, for which dowels stand in.
+The skill parameters (operating regions, transition errors, parameter selection) were measured on SUNDVIK and are reused
+unchanged for the other products.</p></section>
 
 <section><h2>How it works</h2>
 <div class="steps">
